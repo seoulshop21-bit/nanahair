@@ -431,9 +431,13 @@ document.addEventListener('DOMContentLoaded', async function() {
   };
   const images = () => [...document.querySelectorAll('img')].filter(i => !i.closest('#nana-admin-bar'));
 
+  let applying = false;
   function apply() {
-    editables().forEach(el => { const v = data['t:' + key(el)]; if (v != null) el.textContent = v; });
-    images().forEach(im => { const v = data['i:' + key(im)]; if (v) im.src = v; });
+    if (applying) return;
+    applying = true;
+    editables().forEach(el => { const v = data['t:' + key(el)]; if (v != null && el.textContent !== v) el.textContent = v; });
+    images().forEach(im => { const v = data['i:' + key(im)]; if (v && im.src !== v) im.src = v; });
+    applying = false;
   }
 
   const save = () => localStorage.setItem(LS_KEY, JSON.stringify(local));
@@ -542,12 +546,15 @@ document.addEventListener('DOMContentLoaded', async function() {
   async function boot() {
     if (!document.querySelector('h1')) return setTimeout(boot, 120);
     try {
-      const r = await fetch('overrides.json', { cache: 'no-store' });
+      const r = await fetch('overrides.json?t=' + Date.now(), { cache: 'no-store' });
       if (r.ok) Object.assign(baked, await r.json());
     } catch (e) {}
     data = Object.assign({}, baked, local);
     apply();
-    setTimeout(apply, 600);
+    // 페이지가 단계적으로 그려지므로 바뀜 때마다 다시 입혀넣는다
+    let ticks = 0;
+    const t = setInterval(() => { apply(); if (++ticks > 40) clearInterval(t); }, 250);
+    new MutationObserver(() => apply()).observe(document.body, { childList: true, subtree: true });
     if (isAdmin) buildBar();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
